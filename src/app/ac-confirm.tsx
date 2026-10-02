@@ -1,5 +1,5 @@
-// Import AC screenshots one by one: read the calendar on-device, show the
-// values next to the image, one tap to save and move to the next image.
+// Import an AC screenshot into the month the user picked beforehand: read the
+// calendar on-device, show the values next to the image, one tap to save.
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -17,7 +17,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const AC_LABEL = { 1: 'แอร์ของฉัน', 2: 'แอร์พี่ชาย' } as const;
 
 export default function AcConfirm() {
-  const params = useLocalSearchParams<{ ac: string; uris: string }>();
+  const params = useLocalSearchParams<{ ac: string; uris: string; month?: string }>();
   const ac = (Number(params.ac) === 1 ? 1 : 2) as db.AcId;
   const uris: string[] = JSON.parse(params.uris ?? '[]');
 
@@ -25,7 +25,13 @@ export default function AcConfirm() {
   const [status, setStatus] = useState<'reading' | 'ready' | 'error'>('reading');
   const [method, setMethod] = useState<'ocr' | 'ai' | 'manual'>('ocr');
   const [error, setError] = useState('');
-  const [ym, setYm] = useState({ year: 0, month: 0 });
+  const chosen = params.month?.split('-').map(Number) ?? [];
+  const [ym, setYm] = useState(() => {
+    const now = new Date();
+    return { year: chosen[0] || now.getFullYear(), month: chosen[1] || now.getMonth() + 1 };
+  });
+  // Month printed on the screenshot, only used to warn about a mismatch.
+  const [seen, setSeen] = useState<{ year: number; month: number } | null>(null);
   const [values, setValues] = useState<Record<number, string>>({});
   const [notes, setNotes] = useState('');
   const [existing, setExisting] = useState<Map<string, number>>(new Map());
@@ -40,8 +46,9 @@ export default function AcConfirm() {
   useEffect(() => { getApiKey().then((k) => setHasKey(!!k)); }, []);
 
   const apply = (ex: Extracted, how: typeof method) => {
-    const now = new Date();
-    setYm({ year: ex.year || now.getFullYear(), month: ex.month || now.getMonth() + 1 });
+    // The month chosen before import wins; the one read from the image is a hint.
+    setSeen(ex.month ? { year: ex.year, month: ex.month } : null);
+    if (!params.month && ex.month) setYm({ year: ex.year, month: ex.month });
     const v: Record<number, string> = {};
     for (const d of ex.days) v[d.day] = d.kwh == null ? '' : String(d.kwh);
     setValues(v);
@@ -170,6 +177,10 @@ export default function AcConfirm() {
                 <Pressable onPress={() => read('ai')}><Badge label="ค่าไม่ตรง? ให้ AI อ่าน" bg="#fff" /></Pressable>
               )}
             </View>
+            {seen && (seen.month !== ym.month || seen.year !== ym.year) && (
+              <Badge icon="alert" color={C.red} bg={C.redSoft}
+                label={`ในภาพเหมือนเป็น ${formatThaiMonth(`${seen.year}-${pad(seen.month)}`)} ตรวจเดือนอีกครั้ง`} />
+            )}
             {warnings.map((w, i) => <Badge key={i} icon="alert" label={w.message} color={C.red} bg={C.redSoft} />)}
             {notes ? <T v="small">{notes}</T> : null}
           </Card>

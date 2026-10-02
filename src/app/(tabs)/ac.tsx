@@ -27,10 +27,11 @@ export default function Ac() {
   const load = useCallback(() => { db.listAcDays(ac).then(setDays); }, [ac]);
   useFocusEffect(load);
 
-  const importShots = async () => {
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 12, quality: 1 });
+  // The month is chosen first (the one shown below), so it is never misread.
+  const importShot = async () => {
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
     if (r.canceled || r.assets.length === 0) return;
-    router.push({ pathname: '/ac-confirm', params: { ac: String(ac), uris: JSON.stringify(r.assets.map((a) => a.uri)) } });
+    router.push({ pathname: '/ac-confirm', params: { ac: String(ac), month, uris: JSON.stringify([r.assets[0].uri]) } });
   };
 
   const color = ac === 1 ? CAT_COLOR.ac1 : CAT_COLOR.ac2;
@@ -68,29 +69,33 @@ export default function Ac() {
       <Segmented<db.AcId> value={ac} onChange={(v) => { setAc(v); setEditing(null); }}
         options={[{ value: 1, label: 'แอร์ของฉัน', color: C.skySoft }, { value: 2, label: 'แอร์พี่ชาย', color: C.coralSoft }]} />
 
+      <Card>
+        <T v="sub" style={{ textAlign: 'center' }}>1. เลือกเดือน</T>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <IconButton icon="left" size={40} onPress={() => { setMonth(shiftMonth(month, -1)); setEditing(null); }} />
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <T v="title" style={{ fontSize: 22 }}>{formatThaiMonth(month)}</T>
+            <T v="small">รวม {kwh(total)} หน่วย · มีข้อมูล {values.length} วัน</T>
+          </View>
+          <IconButton icon="right" size={40} onPress={() => { setMonth(shiftMonth(month, 1)); setEditing(null); }} />
+        </View>
+      </Card>
+
       <Card color={soft}>
+        <T v="sub" style={{ textAlign: 'center' }}>2. นำเข้าภาพหน้าจอของเดือนนี้</T>
         <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
           <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: '#fff', borderWidth: 2, borderColor: C.ink, alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="scan" size={28} />
           </View>
           <View style={{ flex: 1 }}>
-            <T v="h">นำเข้าจากภาพหน้าจอ</T>
-            <T v="sub">อ่านตารางในเครื่องอัตโนมัติ ฟรี ไม่ต้องใช้เน็ต เลือกได้หลายภาพพร้อมกัน</T>
+            <T v="h">ภาพของ {formatThaiMonth(month)}</T>
+            <T v="sub">อ่านตารางในเครื่องอัตโนมัติ ฟรี ไม่ต้องใช้เน็ต แล้วตรวจก่อนบันทึก</T>
           </View>
         </View>
-        <Button title="เลือกภาพหน้าจอ" icon="image" onPress={importShots} />
+        <Button title="เลือกภาพหน้าจอ" icon="image" onPress={importShot} />
       </Card>
 
       <Card>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <IconButton icon="left" size={38} onPress={() => setMonth(shiftMonth(month, -1))} />
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <T v="h">{formatThaiMonth(month)}</T>
-            <T v="small">รวม {kwh(total)} หน่วย</T>
-          </View>
-          <IconButton icon="right" size={38} onPress={() => setMonth(shiftMonth(month, 1))} />
-        </View>
-
         <View style={{ flexDirection: 'row' }}>
           {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((d) => (
             <T key={d} v="small" style={{ width: '14.28%', textAlign: 'center' }}>{d}</T>

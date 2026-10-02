@@ -294,3 +294,35 @@ export async function saveSettings(patch: Partial<Settings>) {
     );
   }
 }
+
+// ---------- reset ----------
+
+export type ResetPart = 'meter' | 'ac1' | 'ac2' | 'receipts' | 'bills' | 'settings';
+
+/** Deletes the chosen data. Returns image paths that are no longer used. */
+export async function resetData(parts: ResetPart[]): Promise<string[]> {
+  const db = await getDb();
+  const images: string[] = [];
+  const paths = async (sql: string, ...args: (string | number)[]) =>
+    (await db.getAllAsync<{ p: string | null }>(sql, ...args)).forEach((r) => r.p && images.push(r.p));
+
+  await db.withTransactionAsync(async () => {
+    if (parts.includes('meter')) await db.runAsync('DELETE FROM meter_readings');
+    for (const ac of [1, 2] as const) {
+      if (!parts.includes(ac === 1 ? 'ac1' : 'ac2')) continue;
+      await paths('SELECT path AS p FROM screenshots WHERE ac = ?', ac);
+      await db.runAsync('DELETE FROM screenshots WHERE ac = ?', ac);
+      await db.runAsync('DELETE FROM ac_daily WHERE ac = ?', ac);
+    }
+    if (parts.includes('receipts')) {
+      await paths('SELECT slip_path AS p FROM receipts');
+      await db.runAsync('DELETE FROM receipts');
+    }
+    if (parts.includes('bills')) {
+      await paths('SELECT photo_path AS p FROM bills');
+      await db.runAsync('DELETE FROM bills');
+    }
+    if (parts.includes('settings')) await db.runAsync('DELETE FROM settings');
+  });
+  return images;
+}

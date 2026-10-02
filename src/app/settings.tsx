@@ -12,6 +12,7 @@ import { DEFAULT_TARIFF } from '../lib/tariff';
 import { getApiKey, setApiKey } from '../lib/acExtract';
 import { cancelReminder, scheduleDailyReminder } from '../lib/notify';
 import { exportBackup, pickBackup } from '../lib/backup';
+import { reset, RESET_LABEL } from '../lib/reset';
 import { checkForUpdate, currentBuild, installRelease } from '../lib/updater';
 
 const num = (s: string) => Number(s.replace(/,/g, ''));
@@ -38,6 +39,9 @@ export default function SettingsScreen() {
   const [key, setKey] = useState('');
   const [hasKey, setHasKey] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [wipe, setWipe] = useState<db.ResetPart[]>([]);
+  const [wiping, setWiping] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useFocusEffect(useCallback(() => {
     db.getSettings().then((x) => {
@@ -49,7 +53,7 @@ export default function SettingsScreen() {
       setCycleDay(String(x.cycleEndDay));
     });
     getApiKey().then((k) => setHasKey(!!k));
-  }, []));
+  }, [reloadKey]));
 
   if (!s) return null;
 
@@ -135,6 +139,32 @@ export default function SettingsScreen() {
     }
   };
 
+  const ALL = Object.keys(RESET_LABEL) as db.ResetPart[];
+  const toggleWipe = (p: db.ResetPart) => setWipe(wipe.includes(p) ? wipe.filter((x) => x !== p) : [...wipe, p]);
+  const doWipe = async () => {
+    setWiping(true);
+    try {
+      await reset(wipe);
+      setWipe([]);
+      setReloadKey((k) => k + 1);
+      Alert.alert('ล้างข้อมูลเรียบร้อย');
+    } catch (e) {
+      Alert.alert('ล้างข้อมูลไม่สำเร็จ', String(e));
+    } finally {
+      setWiping(false);
+    }
+  };
+  const confirmWipe = () =>
+    Alert.alert(
+      'ลบข้อมูลถาวร?',
+      `จะลบ:\n• ${wipe.map((p) => RESET_LABEL[p]).join('\n• ')}\n\nกู้คืนไม่ได้ ถ้าไม่ได้สำรองไว้ แนะนำให้สำรองก่อน`,
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        { text: 'สำรองก่อน', onPress: () => exportBackup().catch((e) => Alert.alert('สำรองไม่สำเร็จ', String(e))) },
+        { text: 'ลบเลย', style: 'destructive', onPress: doWipe },
+      ],
+    );
+
   const tierLabel = (i: number) => {
     const from = i === 0 ? 1 : num(tiers[i - 1].upTo) + 1;
     return i === tiers.length - 1 ? `หน่วยที่ ${from} ขึ้นไป (บาท/หน่วย)` : `หน่วยที่ ${from} ถึง`;
@@ -194,6 +224,36 @@ export default function SettingsScreen() {
         <Field label={hasKey ? 'เปลี่ยน key (เว้นว่างแล้วกดบันทึก = ลบ)' : 'Claude API key'} value={key} onChangeText={setKey}
           autoCapitalize="none" autoCorrect={false} secureTextEntry placeholder="sk-ant-..." />
         <Button kind="ghost" icon="key" title="บันทึก key" onPress={saveKey} />
+      </Card>
+
+      <Card color={C.redSoft}>
+        <Head icon="trash" title="ล้างข้อมูล (Reset)" bg="#fff" />
+        <T v="sub">เลือกสิ่งที่จะลบ แล้วกดปุ่มด้านล่าง</T>
+        <View style={{ gap: 8 }}>
+          {ALL.map((p) => {
+            const on = wipe.includes(p);
+            return (
+              <Pressable key={p} onPress={() => toggleWipe(p)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 }}>
+                <View style={{ width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: C.ink,
+                  backgroundColor: on ? C.red : '#fff', alignItems: 'center', justifyContent: 'center' }}>
+                  {on && <Icon name="check" size={16} color="#fff" />}
+                </View>
+                <T v="body" style={{ flex: 1 }}>{RESET_LABEL[p]}</T>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Button kind="ghost" small title={wipe.length === ALL.length ? 'ไม่เลือกเลย' : 'เลือกทั้งหมด'}
+              onPress={() => setWipe(wipe.length === ALL.length ? [] : ALL)} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button kind="danger" small icon="trash" title={`ลบ (${wipe.length})`} disabled={wipe.length === 0}
+              busy={wiping} onPress={confirmWipe} />
+          </View>
+        </View>
       </Card>
 
       <Card style={{ alignItems: 'center' }}>
