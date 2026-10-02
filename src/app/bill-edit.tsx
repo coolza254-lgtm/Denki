@@ -15,7 +15,7 @@ const num = (s: string) => Number(s.replace(/,/g, ''));
 export default function BillEdit() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [periodEnd, setPeriodEnd] = useState(today());
-  const [f, setF] = useState({ kwh: '', energy: '', ftRate: '', service: '', vat: '', total: '' });
+  const [f, setF] = useState({ prev: '', last: '', kwh: '', energy: '', ftRate: '', service: '', vat: '', total: '' });
   const [photo, setPhoto] = useState<string | null>(null);
   const [newPhotoUri, setNewPhotoUri] = useState<string | null>(null);
 
@@ -30,13 +30,21 @@ export default function BillEdit() {
       const b = bills.find((x) => x.id === Number(id));
       if (!b) return;
       setPeriodEnd(b.periodEnd);
-      setF({ kwh: String(b.kwh), energy: String(b.energy), ftRate: String(b.ftRate),
+      setF({ prev: b.prevReading == null ? '' : String(b.prevReading), last: b.lastReading == null ? '' : String(b.lastReading), kwh: String(b.kwh), energy: String(b.energy), ftRate: String(b.ftRate),
         service: String(b.service), vat: String(b.vat), total: String(b.total) });
       setPhoto(b.photoPath);
     });
   }, [id]));
 
-  const set = (k: keyof typeof f) => (t: string) => setF({ ...f, [k]: t });
+  const set = (k: keyof typeof f) => (t: string) => {
+    const next = { ...f, [k]: t };
+    // Units = last reading - previous reading, as on the bill.
+    if ((k === 'prev' || k === 'last') && next.prev !== '' && next.last !== '') {
+      const d = num(next.last) - num(next.prev);
+      if (Number.isFinite(d) && d >= 0) next.kwh = String(round2(d));
+    }
+    setF(next);
+  };
   const ft = round2(num(f.kwh) * num(f.ftRate));
   const computed = round2(num(f.energy) + ft + num(f.service) + num(f.vat));
   const ok = f.total !== '' && f.energy !== '' && Math.abs(computed - num(f.total)) <= 0.05;
@@ -59,6 +67,7 @@ export default function BillEdit() {
       id: id ? Number(id) : undefined, periodEnd,
       kwh: num(f.kwh), energy: num(f.energy), ftRate: num(f.ftRate),
       service: num(f.service), vat: num(f.vat), total: num(f.total), photoPath,
+      prevReading: f.prev === '' ? null : num(f.prev), lastReading: f.last === '' ? null : num(f.last),
     });
     router.back();
   };
@@ -91,6 +100,11 @@ export default function BillEdit() {
       <Card>
         <T v="h">ตัวเลขจากบิล</T>
         <DateButton label="วันที่จดเลขอ่าน" value={periodEnd} onChange={setPeriodEnd} />
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}><Field label="เลขอ่านครั้งก่อน" keyboardType="decimal-pad" value={f.prev} onChangeText={set('prev')} placeholder="9507" /></View>
+          <View style={{ flex: 1 }}><Field label="เลขอ่านครั้งหลัง" keyboardType="decimal-pad" value={f.last} onChangeText={set('last')} placeholder="9961" /></View>
+        </View>
+        <T v="small">เลขอ่านครั้งหลังจะถูกใช้เป็นจุดเริ่มนับหน่วยของรอบถัดไปในหน้าจดมิเตอร์</T>
         <Field label="จำนวนหน่วย (kWh)" keyboardType="decimal-pad" value={f.kwh} onChangeText={set('kwh')} />
         <Field label="ค่าพลังงานไฟฟ้า" keyboardType="decimal-pad" value={f.energy} onChangeText={set('energy')} />
         <View style={{ flexDirection: 'row', gap: 10 }}>

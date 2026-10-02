@@ -1,6 +1,6 @@
 // The receipt as it appears in the shared image.
 import { forwardRef } from 'react';
-import { Image, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { baht, kwh } from './ui';
 import type { Receipt } from '../lib/db';
@@ -9,8 +9,6 @@ import { promptPayPayload } from '../lib/promptpay';
 import { formatThaiDate, daysBetween } from '../lib/dates';
 import { C, F } from '../theme';
 
-const AC_LABEL = { 1: 'แอร์ของฉัน', 2: 'แอร์พี่ชาย' } as const;
-const LOGO = require('../../assets/logo-full.png');
 
 function Line({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   const st = { fontFamily: bold ? F.bold : F.regular, fontSize: bold ? 20 : 14, color: C.ink };
@@ -34,13 +32,11 @@ export const ReceiptView = forwardRef<View, { receipt: Receipt }>(({ receipt: r 
   return (
     <View ref={ref} collapsable={false} style={{ backgroundColor: C.bg, padding: 12 }}>
       <View style={{ backgroundColor: '#fff', borderRadius: 24, borderWidth: 2, borderColor: C.ink, overflow: 'hidden' }}>
-        <View style={{ backgroundColor: C.volt, padding: 18, alignItems: 'center', gap: 2, borderBottomWidth: 2, borderColor: C.ink }}>
-          <Image source={LOGO} style={{ width: 62, height: 66 }} resizeMode="contain" />
-          <Text style={{ fontFamily: F.bold, fontSize: 22, color: C.ink }}>ใบแจ้งค่าไฟฟ้า</Text>
-          <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.ink }}>{AC_LABEL[r.ac]}</Text>
-          <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.ink }}>
-            {formatThaiDate(r.startDate)} – {formatThaiDate(r.endDate)} · {days} วัน
+        <View style={{ backgroundColor: C.volt, paddingVertical: 16, paddingHorizontal: 18, alignItems: 'center', gap: 2, borderBottomWidth: 2, borderColor: C.ink }}>
+          <Text style={{ fontFamily: F.bold, fontSize: 20, color: C.ink }}>
+            {formatThaiDate(r.startDate)} – {formatThaiDate(r.endDate)}
           </Text>
+          <Text style={{ fontFamily: F.regular, fontSize: 14, color: C.ink }}>{days} วัน</Text>
         </View>
 
         <View style={{ padding: 18, gap: 2 }}>
@@ -75,7 +71,6 @@ export const ReceiptView = forwardRef<View, { receipt: Receipt }>(({ receipt: r 
           </Text>
         </View>
       </View>
-      <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted, textAlign: 'center', marginTop: 8 }}>สร้างด้วย Denki ⚡</Text>
     </View>
   );
 });

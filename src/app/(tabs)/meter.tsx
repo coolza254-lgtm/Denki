@@ -3,11 +3,12 @@ import { useCallback, useRef, useState } from 'react';
 import { Alert, Animated, Pressable, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { Badge, Button, Card, EmptyState, Screen, ScreenHeader, Squish, T, kwh, success } from '../../components/ui';
+import { Badge, Button, Card, DateButton, EmptyState, Field, Screen, ScreenHeader, Squish, T, baht, kwh, success } from '../../components/ui';
 import { Icon } from '../../components/Icon';
 import * as db from '../../lib/db';
 import type { MeterReading } from '../../lib/usage';
-import { daysBetween, formatThaiDate, formatThaiShort, formatTime, parseISODateTime, toISODateTime } from '../../lib/dates';
+import { addDays, cycleFor, daysBetween, formatThaiDate, formatThaiShort, formatTime, parseISODateTime, toISODateTime, today } from '../../lib/dates';
+import { houseBill, type Tariff } from '../../lib/tariff';
 import { C, F, R } from '../../theme';
 
 export default function Meter() {
@@ -17,11 +18,31 @@ export default function Meter() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
   const toastA = useRef(new Animated.Value(0)).current;
+  const [tariff, setTariff] = useState<Tariff | null>(null);
+  const [meaEdit, setMeaEdit] = useState<{ value: string; date: string } | null>(null);
+  const [showMeaForm, setShowMeaForm] = useState(false);
 
   const load = useCallback(() => {
     db.listReadings().then(setReadings);
+    db.getSettings().then((st) => {
+      setTariff(st.tariff);
+      // Default MEA reading date: the last cycle end on or before today.
+      const lastCut = addDays(cycleFor(today(), st.cycleEndDay).start, -1);
+      setMeaEdit((m) => m ?? { value: '', date: lastCut });
+    });
     setAt(toISODateTime(new Date()));
   }, []);
+
+  const saveMea = async () => {
+    if (!meaEdit) return;
+    const v = Number(meaEdit.value.replace(/,/g, ''));
+    if (!meaEdit.value || !Number.isFinite(v) || v < 0) return Alert.alert('ใส่เลขที่ กฟน. จดให้ถูกต้อง');
+    await db.setMeaReading(`${meaEdit.date}T09:00`, v);
+    success();
+    setMeaEdit(null);
+    setShowMeaForm(false);
+    load();
+  };
   useFocusEffect(load);
 
   const showToast = (msg: string) => {
@@ -82,10 +103,72 @@ export default function Meter() {
 
   const recent = readings.slice(-30).reverse();
   const last = readings[readings.length - 1];
+  const mea = [...readings].reverse().find((r) => r.source === 'mea');
+  const sinceMea = mea && last && last.readAt > mea.readAt ? last.value - mea.value : null;
+  const editingMea = !mea || showMeaForm;
 
   return (
     <Screen tabs>
       <ScreenHeader title="จดมิเตอร์" sub={last ? `ครั้งล่าสุด ${formatThaiShort(last.readAt)} · ${last.value}` : 'มิเตอร์หน้าบ้าน'} />
+
+      <Card color={C.voltSoft}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff', borderWidth: 2, borderColor: C.ink, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="receipt" size={22} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <T v="h">เลขที่ กฟน. จดรอบล่าสุด</T>
+            <T v="small">"เลขอ่านครั้งหลัง" บนบิลค่าไฟ ใช้เป็นจุดเริ่มนับหน่วย</T>
+          </View>
+        </View>
+
+        {mea && !showMeaForm && (
+          <>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+              <View>
+                <T v="small">จดเมื่อ {formatThaiDate(mea.readAt)}</T>
+                <T v="title" style={{ fontFamily: F.bold }}>{mea.value}</T>
+              </View>
+              <Button kind="ghost" small title="แก้ไข" onPress={() => {
+                setMeaEdit({ value: String(mea.value), date: mea.readAt.slice(0, 10) });
+                setShowMeaForm(true);
+              }} />
+            </View>
+            <View style={{ backgroundColor: '#fff', borderRadius: R.md, borderWidth: 2, borderColor: C.ink, padding: 12, gap: 2 }}>
+              {sinceMea == null ? (
+                <T v="sub">จดเลขมิเตอร์ด้านล่าง แล้วจะเห็นว่าใช้ไปกี่หน่วยตั้งแต่ กฟน. จด</T>
+              ) : (
+                <>
+                  <T v="sub">ใช้ไปแล้วตั้งแต่ กฟน. จด ({daysBetween(mea.readAt, last!.readAt)} วัน)</T>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                    <T v="title" style={{ fontFamily: F.bold }}>{kwh(sinceMea, 1)} <T v="sub">หน่วย</T></T>
+                    {tariff && <T v="h">≈ ฿{baht(houseBill(sinceMea, tariff).total)}</T>}
+                  </View>
+                  <T v="small">{mea.value} → {last!.value} (รวม Ft ค่าบริการ VAT แล้ว ถ้าตัดบิลวันนี้)</T>
+                </>
+              )}
+            </View>
+          </>
+        )}
+
+        {editingMea && meaEdit && (
+          <>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Field label="เลขที่ กฟน. จด" keyboardType="decimal-pad" value={meaEdit.value} placeholder="9961"
+                  onChangeText={(t) => setMeaEdit({ ...meaEdit, value: t })} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <DateButton label="วันที่จด" value={meaEdit.date} onChange={(d) => setMeaEdit({ ...meaEdit, date: d })} />
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {mea && <View style={{ flex: 1 }}><Button kind="ghost" small title="ยกเลิก" onPress={() => setShowMeaForm(false)} /></View>}
+              <View style={{ flex: 1 }}><Button small icon="check" title="บันทึกเลข กฟน." onPress={saveMea} /></View>
+            </View>
+          </>
+        )}
+      </Card>
 
       <Card color={C.ink} style={{ gap: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -129,7 +212,9 @@ export default function Meter() {
                 borderTopWidth: i ? 1.5 : 0, borderColor: C.line, borderRadius: 0 }}>
               <View style={{ flex: 1 }}>
                 <T v="body">{formatThaiShort(r.readAt)}</T>
-                <T v="small">{formatTime(r.readAt)} น.</T>
+                {r.source === 'mea'
+                  ? <Badge label="กฟน. จด" bg={C.voltSoft} />
+                  : <T v="small">{formatTime(r.readAt)} น.</T>}
               </View>
               <T v="num" style={{ fontSize: 17 }}>{r.value}</T>
               <View style={{ width: 96, alignItems: 'flex-end' }}>

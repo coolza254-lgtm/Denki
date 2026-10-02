@@ -1,7 +1,8 @@
 // Turns main-meter readings into per-day house usage.
 import { addDays, dateRange } from './dates';
 
-export type MeterReading = { id: number; readAt: string; value: number };
+/** source 'mea' = the official reading printed on the electricity bill. */
+export type MeterReading = { id: number; readAt: string; value: number; source?: 'me' | 'mea' };
 
 export type DayUsage = {
   date: string;

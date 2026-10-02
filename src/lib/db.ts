@@ -19,6 +19,9 @@ export type Bill = {
   vat: number;
   total: number;
   photoPath: string | null;
+  /** Meter numbers printed on the bill (เลขอ่านครั้งก่อน / ครั้งหลัง). */
+  prevReading: number | null;
+  lastReading: number | null;
   createdAt: string;
 };
 
@@ -101,7 +104,18 @@ async function open() {
       value TEXT NOT NULL
     );
   `);
+  await migrate(db);
   return db;
+}
+
+/** Adds columns introduced after the first release. */
+async function migrate(db: SQLite.SQLiteDatabase) {
+  const has = async (table: string, col: string) =>
+    (await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)).some((c) => c.name === col);
+  if (!(await has('meter_readings', 'source')))
+    await db.execAsync("ALTER TABLE meter_readings ADD COLUMN source TEXT NOT NULL DEFAULT 'me'");
+  if (!(await has('bills', 'prev_reading'))) await db.execAsync('ALTER TABLE bills ADD COLUMN prev_reading REAL');
+  if (!(await has('bills', 'last_reading'))) await db.execAsync('ALTER TABLE bills ADD COLUMN last_reading REAL');
 }
 
 const nowIso = () => new Date().toISOString();
@@ -111,13 +125,30 @@ const nowIso = () => new Date().toISOString();
 export async function listReadings(): Promise<MeterReading[]> {
   const db = await getDb();
   return db.getAllAsync<MeterReading>(
-    'SELECT id, read_at AS readAt, value FROM meter_readings ORDER BY read_at',
+    'SELECT id, read_at AS readAt, value, source FROM meter_readings ORDER BY read_at',
   );
 }
 
 export async function addReading(readAt: string, value: number) {
   const db = await getDb();
   await db.runAsync('INSERT INTO meter_readings (read_at, value) VALUES (?, ?)', readAt, value);
+}
+
+/** The latest official MEA reading (the number on the bill), if any. */
+export async function latestMeaReading(): Promise<MeterReading | null> {
+  const db = await getDb();
+  return db.getFirstAsync<MeterReading>(
+    "SELECT id, read_at AS readAt, value, source FROM meter_readings WHERE source = 'mea' ORDER BY read_at DESC LIMIT 1",
+  );
+}
+
+/** Records the MEA reading for a date, replacing one already on that date. */
+export async function setMeaReading(readAt: string, value: number) {
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("DELETE FROM meter_readings WHERE source = 'mea' AND substr(read_at, 1, 10) = ?", readAt.slice(0, 10));
+    await db.runAsync("INSERT INTO meter_readings (read_at, value, source) VALUES (?, ?, 'mea')", readAt, value);
+  });
 }
 
 export async function deleteReading(id: number) {
@@ -184,7 +215,8 @@ export async function listBills(): Promise<Bill[]> {
   const db = await getDb();
   return db.getAllAsync<Bill>(
     `SELECT id, period_end AS periodEnd, kwh, energy, ft_rate AS ftRate, service, vat, total,
-            photo_path AS photoPath, created_at AS createdAt
+            photo_path AS photoPath, prev_reading AS prevReading, last_reading AS lastReading,
+            created_at AS createdAt
      FROM bills ORDER BY period_end DESC`,
   );
 }
@@ -193,16 +225,20 @@ export async function saveBill(b: Omit<Bill, 'id' | 'createdAt'> & { id?: number
   const db = await getDb();
   if (b.id) {
     await db.runAsync(
-      `UPDATE bills SET period_end=?, kwh=?, energy=?, ft_rate=?, service=?, vat=?, total=?, photo_path=? WHERE id=?`,
-      b.periodEnd, b.kwh, b.energy, b.ftRate, b.service, b.vat, b.total, b.photoPath, b.id,
+      `UPDATE bills SET period_end=?, kwh=?, energy=?, ft_rate=?, service=?, vat=?, total=?, photo_path=?,
+         prev_reading=?, last_reading=? WHERE id=?`,
+      b.periodEnd, b.kwh, b.energy, b.ftRate, b.service, b.vat, b.total, b.photoPath, b.prevReading, b.lastReading, b.id,
     );
   } else {
     await db.runAsync(
-      `INSERT INTO bills (period_end, kwh, energy, ft_rate, service, vat, total, photo_path, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      b.periodEnd, b.kwh, b.energy, b.ftRate, b.service, b.vat, b.total, b.photoPath, nowIso(),
+      `INSERT INTO bills (period_end, kwh, energy, ft_rate, service, vat, total, photo_path,
+         prev_reading, last_reading, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      b.periodEnd, b.kwh, b.energy, b.ftRate, b.service, b.vat, b.total, b.photoPath, b.prevReading, b.lastReading, nowIso(),
     );
   }
+  // The bill's reading is the official starting point for the next cycle.
+  if (b.lastReading != null) await setMeaReading(`${b.periodEnd}T09:00`, b.lastReading);
 }
 
 export async function deleteBill(id: number) {
