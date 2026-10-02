@@ -4,6 +4,7 @@ import { houseBill, DEFAULT_TARIFF, priceShare, basisFromTariff, energyCharge } 
 import { promptPayPayload, crc16 } from '../src/lib/promptpay';
 import { dailyHouseUsage, sumUsage } from '../src/lib/usage';
 import { cycleFor } from '../src/lib/dates';
+import { checkExtracted } from '../src/lib/acCheck';
 
 test('house bill matches the real 09/69 MEA bill', () => {
   const b = houseBill(454, DEFAULT_TARIFF);
@@ -74,4 +75,20 @@ test('billing cycle ends on the reading day', () => {
   assert.deepEqual(cycleFor('2026-09-23', 22), { start: '2026-09-23', end: '2026-10-22' });
   assert.deepEqual(cycleFor('2026-01-05', 22), { start: '2025-12-23', end: '2026-01-22' });
   assert.deepEqual(cycleFor('2026-03-01', 30), { start: '2026-03-01', end: '2026-03-30' });
+});
+
+test('screenshot checks flag bad values', () => {
+  const w = checkExtracted(
+    { year: 2026, month: 9, notes: '', days: [
+      { day: 1, kwh: 3.07 }, { day: 2, kwh: 15 }, { day: 3, kwh: -1 }, { day: 31, kwh: 2 }, { day: 14, kwh: null },
+    ] },
+    [3, 4, 4.5, 5],
+    new Date(2026, 9, 2),
+  );
+  const msgs = w.map((x) => x.message).join('|');
+  assert.match(msgs, /วันที่ 2 สูงกว่าปกติ/);
+  assert.match(msgs, /วันที่ 3 ติดลบ/);
+  assert.match(msgs, /ไม่มีวันที่ 31/);
+  assert.equal(w.length, 3);
+  assert.equal(checkExtracted({ year: 2026, month: 11, days: [], notes: '' }, [], new Date(2026, 9, 2))[0].message, 'เดือนในภาพอยู่ในอนาคต');
 });
