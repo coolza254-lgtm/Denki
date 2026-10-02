@@ -1,24 +1,38 @@
-// Type in the main meter number. Date/time defaults to now.
-import { useCallback, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+// Type in the main meter number on a big "LCD" display. Date/time = now.
+import { useCallback, useRef, useState } from 'react';
+import { Alert, Animated, Pressable, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { Button, C, Card, Field, H, Screen, Sub, kwh } from '../../components/ui';
+import { Badge, Button, Card, EmptyState, Screen, ScreenHeader, Squish, T, kwh, success } from '../../components/ui';
+import { Icon } from '../../components/Icon';
 import * as db from '../../lib/db';
 import type { MeterReading } from '../../lib/usage';
-import { daysBetween, formatThaiDate, formatTime, parseISODateTime, toISODateTime } from '../../lib/dates';
+import { daysBetween, formatThaiDate, formatThaiShort, formatTime, parseISODateTime, toISODateTime } from '../../lib/dates';
+import { C, F, R } from '../../theme';
 
 export default function Meter() {
   const [readings, setReadings] = useState<MeterReading[]>([]);
   const [value, setValue] = useState('');
   const [at, setAt] = useState(toISODateTime(new Date()));
   const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState('');
+  const toastA = useRef(new Animated.Value(0)).current;
 
   const load = useCallback(() => {
     db.listReadings().then(setReadings);
     setAt(toISODateTime(new Date()));
   }, []);
   useFocusEffect(load);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    toastA.setValue(0);
+    Animated.sequence([
+      Animated.spring(toastA, { toValue: 1, useNativeDriver: true, bounciness: 12 }),
+      Animated.delay(1800),
+      Animated.timing(toastA, { toValue: 0, duration: 250, useNativeDriver: true }),
+    ]).start();
+  };
 
   const pick = (mode: 'date' | 'time') =>
     DateTimePickerAndroid.open({
@@ -41,8 +55,10 @@ export default function Meter() {
     const doSave = async () => {
       setBusy(true);
       await db.addReading(at, v);
+      success();
       setValue('');
       setBusy(false);
+      showToast(before ? `+${kwh(v - before.value, 1)} หน่วย จากครั้งก่อน` : 'บันทึกแล้ว!');
       load();
     };
     if (before) {
@@ -68,45 +84,62 @@ export default function Meter() {
   const last = readings[readings.length - 1];
 
   return (
-    <Screen>
-      <Card>
-        <H>จดเลขมิเตอร์หน้าบ้าน</H>
-        <Field label={last ? `ครั้งล่าสุด ${last.value} (${formatThaiDate(last.readAt)})` : 'เลขบนมิเตอร์'}
-          big keyboardType="decimal-pad" value={value} onChangeText={setValue} placeholder="0000" />
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable style={chip} onPress={() => pick('date')}>
-            <Text style={chipText}>📅 {formatThaiDate(at)}</Text>
-          </Pressable>
-          <Pressable style={chip} onPress={() => pick('time')}>
-            <Text style={chipText}>🕒 {formatTime(at)}</Text>
-          </Pressable>
+    <Screen tabs>
+      <ScreenHeader title="จดมิเตอร์" sub={last ? `ครั้งล่าสุด ${formatThaiShort(last.readAt)} · ${last.value}` : 'มิเตอร์หน้าบ้าน'} />
+
+      <Card color={C.ink} style={{ gap: 14 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Icon name="bolt" size={18} color={C.volt} fill={C.volt} />
+          <T v="sub" style={{ color: '#C9D0DA' }}>เลขบนมิเตอร์ (kWh)</T>
         </View>
-        <Button title="บันทึก" onPress={save} busy={busy} />
+        <View style={{ backgroundColor: '#1C242F', borderRadius: R.md, borderWidth: 2, borderColor: '#3A4656', paddingVertical: 6 }}>
+          <TextInput value={value} onChangeText={setValue} keyboardType="decimal-pad"
+            placeholder={last ? String(last.value) : '0000'} placeholderTextColor="#4A5666"
+            style={{ fontFamily: F.bold, fontSize: 52, color: C.volt, textAlign: 'center', letterSpacing: 6, paddingVertical: 4 }} />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          {([['date', 'calendar', formatThaiDate(at)], ['time', 'clock', formatTime(at)]] as const).map(([mode, icon, label]) => (
+            <Pressable key={mode} onPress={() => pick(mode)}
+              style={{ flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: R.md, backgroundColor: '#364252' }}>
+              <Icon name={icon} size={18} color="#fff" />
+              <T v="body" style={{ color: '#fff' }}>{label}</T>
+            </Pressable>
+          ))}
+        </View>
+        <Button title="บันทึก" icon="bolt" onPress={save} busy={busy} />
       </Card>
 
-      <Card>
-        <H>ประวัติ</H>
-        {recent.length === 0 && <Sub>ยังไม่มีข้อมูล</Sub>}
+      <Animated.View pointerEvents="none" style={{
+        position: 'absolute', alignSelf: 'center', top: 120, opacity: toastA,
+        transform: [{ scale: toastA.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
+      }}>
+        <Badge icon="check" label={toast} bg={C.mintSoft} />
+      </Animated.View>
+
+      <T v="h">ประวัติ</T>
+      <Card style={{ paddingVertical: 8, gap: 0 }}>
+        {recent.length === 0 && <EmptyState title="ยังไม่มีข้อมูล" text="จดเลขมิเตอร์ครั้งแรกด้านบนได้เลย" />}
         {recent.map((r, i) => {
           const prev = recent[i + 1];
           const diff = prev ? r.value - prev.value : null;
           const days = prev ? daysBetween(prev.readAt, r.readAt) : 0;
           return (
-            <Pressable key={r.id} onLongPress={() => confirmDelete(r)}
-              style={{ flexDirection: 'row', paddingVertical: 8, borderTopWidth: i ? 1 : 0, borderColor: C.line }}>
-              <Text style={{ flex: 1, color: C.text }}>{formatThaiDate(r.readAt)} {formatTime(r.readAt)}</Text>
-              <Text style={{ width: 80, textAlign: 'right', color: C.text, fontWeight: '600' }}>{r.value}</Text>
-              <Text style={{ width: 100, textAlign: 'right', color: C.sub }}>
-                {diff == null ? '' : `+${kwh(diff, 1)}${days > 1 ? ` /${days}วัน` : ''}`}
-              </Text>
-            </Pressable>
+            <Squish key={r.id} onLongPress={() => confirmDelete(r)} depth={0} haptic={false}
+              style={{ borderWidth: 0, flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10,
+                borderTopWidth: i ? 1.5 : 0, borderColor: C.line, borderRadius: 0 }}>
+              <View style={{ flex: 1 }}>
+                <T v="body">{formatThaiShort(r.readAt)}</T>
+                <T v="small">{formatTime(r.readAt)} น.</T>
+              </View>
+              <T v="num" style={{ fontSize: 17 }}>{r.value}</T>
+              <View style={{ width: 96, alignItems: 'flex-end' }}>
+                {diff != null && <Badge label={`+${kwh(diff, 1)}${days > 1 ? ` /${days}วัน` : ''}`} bg={days > 1 ? C.voltSoft : C.mintSoft} />}
+              </View>
+            </Squish>
           );
         })}
-        {recent.length > 0 && <Sub>กดค้างที่รายการเพื่อลบ</Sub>}
+        {recent.length > 0 && <T v="small" style={{ textAlign: 'center', paddingTop: 6 }}>กดค้างที่รายการเพื่อลบ</T>}
       </Card>
     </Screen>
   );
 }
-
-const chip = { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, backgroundColor: '#fff' } as const;
-const chipText = { fontSize: 16, color: C.text, textAlign: 'center' } as const;

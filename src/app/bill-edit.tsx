@@ -3,11 +3,12 @@
 import { useCallback, useState } from 'react';
 import { Alert, Image, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { Button, C, Card, DateButton, Field, H, Row, Screen, Sub, baht } from '../components/ui';
+import { Badge, Button, Card, DateButton, Field, Screen, T, baht } from '../components/ui';
 import * as db from '../lib/db';
 import { deleteImage, imageUri, pickImage, storeImage } from '../lib/images';
 import { round2 } from '../lib/tariff';
 import { today } from '../lib/dates';
+import { C, R } from '../theme';
 
 const num = (s: string) => Number(s.replace(/,/g, ''));
 
@@ -38,7 +39,7 @@ export default function BillEdit() {
   const set = (k: keyof typeof f) => (t: string) => setF({ ...f, [k]: t });
   const ft = round2(num(f.kwh) * num(f.ftRate));
   const computed = round2(num(f.energy) + ft + num(f.service) + num(f.vat));
-  const mismatch = f.total !== '' && f.energy !== '' && Math.abs(computed - num(f.total)) > 0.05;
+  const ok = f.total !== '' && f.energy !== '' && Math.abs(computed - num(f.total)) <= 0.05;
 
   const addPhoto = (source: 'library' | 'camera') => async () => {
     const uri = await pickImage(source);
@@ -77,31 +78,38 @@ export default function BillEdit() {
   return (
     <Screen>
       <Card>
-        <H>รูปบิล</H>
-        {shown ? <Image source={{ uri: shown }} style={{ width: '100%', height: 480 }} resizeMode="contain" />
-          : <Sub>ยังไม่มีรูป</Sub>}
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <View style={{ flex: 1 }}><Button kind="secondary" title="🖼️ จากคลังภาพ" onPress={addPhoto('library')} /></View>
-          <View style={{ flex: 1 }}><Button kind="secondary" title="📷 ถ่ายรูป" onPress={addPhoto('camera')} /></View>
+        <T v="h">รูปบิล</T>
+        {shown
+          ? <Image source={{ uri: shown }} style={{ width: '100%', height: 420, borderRadius: R.md }} resizeMode="contain" />
+          : <T v="sub">ถ่ายเก็บไว้ดูย้อนหลังได้</T>}
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}><Button kind="ghost" small icon="image" title="คลังภาพ" onPress={addPhoto('library')} /></View>
+          <View style={{ flex: 1 }}><Button kind="ghost" small icon="camera" title="ถ่ายรูป" onPress={addPhoto('camera')} /></View>
         </View>
       </Card>
 
       <Card>
-        <H>ตัวเลขจากบิล</H>
+        <T v="h">ตัวเลขจากบิล</T>
         <DateButton label="วันที่จดเลขอ่าน" value={periodEnd} onChange={setPeriodEnd} />
         <Field label="จำนวนหน่วย (kWh)" keyboardType="decimal-pad" value={f.kwh} onChangeText={set('kwh')} />
         <Field label="ค่าพลังงานไฟฟ้า" keyboardType="decimal-pad" value={f.energy} onChangeText={set('energy')} />
-        <Field label="ค่า Ft (บาท/หน่วย)" keyboardType="decimal-pad" value={f.ftRate} onChangeText={set('ftRate')} />
-        <Field label="ค่าบริการ" keyboardType="decimal-pad" value={f.service} onChangeText={set('service')} />
-        <Field label="ภาษีมูลค่าเพิ่ม" keyboardType="decimal-pad" value={f.vat} onChangeText={set('vat')} />
-        <Field label="รวมค่าไฟฟ้าเดือนปัจจุบัน" keyboardType="decimal-pad" value={f.total} onChangeText={set('total')} />
-        <Row label="ตรวจสอบ: พลังงาน + Ft + บริการ + VAT" value={baht(computed)} color={mismatch ? C.warn : C.good} />
-        {mismatch && <Sub color={C.warn}>ยอดรวมไม่ตรงกับที่คำนวณ ตรวจตัวเลขอีกครั้ง</Sub>}
-        <Sub>ใช้ยอด "ค่าไฟเดือนปัจจุบัน" ไม่รวมค่าไฟค้างชำระ</Sub>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}><Field label="Ft (บาท/หน่วย)" keyboardType="decimal-pad" value={f.ftRate} onChangeText={set('ftRate')} /></View>
+          <View style={{ flex: 1 }}><Field label="ค่าบริการ" keyboardType="decimal-pad" value={f.service} onChangeText={set('service')} /></View>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}><Field label="VAT" keyboardType="decimal-pad" value={f.vat} onChangeText={set('vat')} /></View>
+          <View style={{ flex: 1 }}><Field label="รวมเดือนปัจจุบัน" keyboardType="decimal-pad" value={f.total} onChangeText={set('total')} /></View>
+        </View>
+        {f.energy !== '' && f.total !== '' && (
+          <Badge icon={ok ? 'check' : 'alert'} color={ok ? C.ink : C.red} bg={ok ? C.mintSoft : C.redSoft}
+            label={ok ? `ตรวจแล้ว ยอดตรง ฿${baht(computed)}` : `ยอดคำนวณได้ ฿${baht(computed)} ไม่ตรงกับยอดรวม`} />
+        )}
+        <T v="small">ใช้ยอด "ค่าไฟเดือนปัจจุบัน" ไม่รวมค่าไฟค้างชำระ</T>
       </Card>
 
-      <Button title="บันทึก" onPress={save} />
-      {id ? <Button kind="danger" title="ลบบิล" onPress={remove} /> : null}
+      <Button title="บันทึก" icon="check" onPress={save} />
+      {id ? <Button kind="danger" icon="trash" title="ลบบิล" onPress={remove} /> : null}
     </Screen>
   );
 }

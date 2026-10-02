@@ -26,7 +26,7 @@ export async function scheduleDailyReminder(time: string): Promise<boolean> {
   await Notifications.cancelAllScheduledNotificationsAsync();
   const [hour, minute] = time.split(':').map(Number);
   await Notifications.scheduleNotificationAsync({
-    content: { title: 'จดเลขมิเตอร์ไฟ', body: 'อย่าลืมจดเลขมิเตอร์หน้าบ้านวันนี้นะ' },
+    content: { title: '⚡ ได้เวลาจดมิเตอร์แล้ว', body: 'Spark รออยู่นะ! จดเลขมิเตอร์หน้าบ้านวันนี้กัน' },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour, minute, channelId: CHANNEL },
   });
   return true;

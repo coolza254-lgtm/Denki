@@ -1,10 +1,12 @@
-// Minimal bar chart: bars, average line, tap a bar to see its value.
-import { useState } from 'react';
-import { Text, View } from 'react-native';
-import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
-import { C } from './ui';
+// Bars that spring up on load, an average line, tap a bar to see its value.
+import { useEffect, useRef } from 'react';
+import { Animated, Pressable, View } from 'react-native';
+import { T } from './ui';
+import { C } from '../theme';
 
 export type Bar = { key: string; label: string; value: number | null };
+
+const HEIGHT = 170;
 
 export function BarChart({ bars, color, format, onSelect, selected }: {
   bars: Bar[];
@@ -13,45 +15,59 @@ export function BarChart({ bars, color, format, onSelect, selected }: {
   onSelect: (key: string) => void;
   selected: string | null;
 }) {
-  const [width, setWidth] = useState(0);
-  const height = 180;
-  const top = 10;
-  const bottom = 20;
+  const grow = useRef(new Animated.Value(0)).current;
+  const signature = bars.map((b) => `${b.key}:${b.value ?? ''}`).join('|');
+  useEffect(() => {
+    grow.setValue(0);
+    Animated.spring(grow, { toValue: 1, useNativeDriver: false, speed: 10, bounciness: 6 }).start();
+  }, [signature]);
+
   const values = bars.map((b) => b.value).filter((v): v is number => v != null);
   const max = Math.max(...values, 0.0001);
   const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-  const slot = width / Math.max(bars.length, 1);
-  const barW = Math.max(2, slot * 0.7);
-  const y = (v: number) => top + (height - top - bottom) * (1 - v / max);
   const labelEvery = bars.length > 15 ? 5 : 1;
+  const thin = bars.length > 15;
 
   return (
-    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      {width > 0 && (
-        <Svg width={width} height={height}>
-          {bars.map((b, i) => {
-            if (b.value == null) return null;
-            const v = Math.max(b.value, 0);
-            const above = b.value >= avg;
-            return (
-              <Rect key={b.key} x={i * slot + (slot - barW) / 2} y={y(v)} width={barW} height={height - bottom - y(v)}
-                rx={2} fill={selected === b.key ? C.text : color} opacity={above ? 1 : 0.45}
-                onPress={() => onSelect(b.key)} />
-            );
-          })}
-          {values.length > 0 && (
-            <Line x1={0} x2={width} y1={y(avg)} y2={y(avg)} stroke={C.text} strokeDasharray="4 4" strokeWidth={1} />
-          )}
-          {bars.map((b, i) => (i % labelEvery === 0 || i === bars.length - 1) && (
-            <SvgText key={`l${b.key}`} x={i * slot + slot / 2} y={height - 4} fontSize={10} fill={C.sub} textAnchor="middle">
-              {b.label}
-            </SvgText>
-          ))}
-        </Svg>
-      )}
-      <Text style={{ fontSize: 12, color: C.sub }}>
-        เส้นประ = ค่าเฉลี่ย {format(avg)} · แท่งจาง = ต่ำกว่าค่าเฉลี่ย · แตะแท่งเพื่อดูค่า
-      </Text>
+    <View style={{ gap: 6 }}>
+      <View style={{ height: HEIGHT, flexDirection: 'row', alignItems: 'flex-end', gap: thin ? 2 : 6 }}>
+        {values.length > 0 && (
+          <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: (avg / max) * HEIGHT, flexDirection: 'row', gap: 4, zIndex: 2 }}>
+            {Array.from({ length: 40 }, (_, i) => <View key={i} style={{ flex: 1, height: 2, backgroundColor: C.ink, opacity: 0.55, borderRadius: 1 }} />)}
+          </View>
+        )}
+        {bars.map((b) => {
+          const v = Math.max(b.value ?? 0, 0);
+          const h = b.value == null ? 0 : Math.max(4, (v / max) * HEIGHT);
+          const on = selected === b.key;
+          const above = b.value != null && b.value >= avg;
+          return (
+            <Pressable key={b.key} onPress={() => onSelect(b.key)} style={{ flex: 1, height: HEIGHT, justifyContent: 'flex-end' }}>
+              {b.value == null ? (
+                <View style={{ height: 4, borderRadius: 2, backgroundColor: C.line }} />
+              ) : (
+                <Animated.View style={{
+                  height: grow.interpolate({ inputRange: [0, 1], outputRange: [0, h] }),
+                  backgroundColor: on ? C.volt : color,
+                  opacity: above || on ? 1 : 0.5,
+                  borderTopLeftRadius: thin ? 4 : 8, borderTopRightRadius: thin ? 4 : 8,
+                  borderWidth: on ? 2 : thin ? 0 : 1.5, borderColor: C.ink, borderBottomWidth: 0,
+                }} />
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={{ height: 2, backgroundColor: C.ink, borderRadius: 1, marginTop: -6 }} />
+      <View style={{ flexDirection: 'row', gap: thin ? 2 : 6 }}>
+        {bars.map((b, i) => (
+          <T key={b.key} v="small" numberOfLines={1}
+            style={{ flex: 1, textAlign: 'center', fontSize: 10, opacity: i % labelEvery === 0 || i === bars.length - 1 ? 1 : 0 }}>
+            {b.label}
+          </T>
+        ))}
+      </View>
+      <T v="small">เส้นประ = ค่าเฉลี่ย {format(avg)} · แท่งจาง = ต่ำกว่าเฉลี่ย · แตะแท่งเพื่อดูค่า</T>
     </View>
   );
 }

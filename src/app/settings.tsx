@@ -1,9 +1,12 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, Switch, Text, View } from 'react-native';
+import { Alert, Image, Pressable, Switch, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { Button, C, Card, Field, H, Row, Screen, Sub } from '../components/ui';
+import { Badge, Button, Card, Field, Row, Screen, T } from '../components/ui';
+import { Icon, type IconName } from '../components/Icon';
+import { Spark } from '../components/Spark';
+import { C } from '../theme';
 import * as db from '../lib/db';
 import { DEFAULT_TARIFF } from '../lib/tariff';
 import { getApiKey, setApiKey } from '../lib/acExtract';
@@ -12,6 +15,18 @@ import { exportBackup, pickBackup } from '../lib/backup';
 import { checkForUpdate, currentBuild, installRelease } from '../lib/updater';
 
 const num = (s: string) => Number(s.replace(/,/g, ''));
+const LOGO = require('../../assets/logo-full.png');
+
+function Head({ icon, title, bg = C.voltSoft }: { icon: IconName; title: string; bg?: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: bg, borderWidth: 2, borderColor: C.ink, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name={icon} size={20} />
+      </View>
+      <T v="h">{title}</T>
+    </View>
+  );
+}
 
 export default function SettingsScreen() {
   const [s, setS] = useState<db.Settings | null>(null);
@@ -128,9 +143,26 @@ export default function SettingsScreen() {
   return (
     <Screen>
       <Card>
-        <H>อัตราค่าไฟ (ตามบิล กฟน.)</H>
+        <Head icon="bell" title="เตือนจดมิเตอร์" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <T v="body">เตือนทุกวัน</T>
+          <Switch value={s.reminderEnabled} onValueChange={toggleReminder}
+            trackColor={{ true: C.volt, false: '#DDD8CC' }} thumbColor={s.reminderEnabled ? C.ink : '#fff'} />
+        </View>
+        <Pressable onPress={pickTime}><Row label="เวลา" value={`${s.reminderTime} น.  ›`} /></Pressable>
+      </Card>
+
+      <Card>
+        <Head icon="backup" title="สำรองข้อมูล" bg={C.skySoft} />
+        <T v="sub">ข้อมูลอยู่ในเครื่องนี้เท่านั้น สำรองเก็บไว้ใน Google Drive / LINE Keep เป็นระยะ เผื่อเปลี่ยนเครื่อง</T>
+        <Button title="สำรองข้อมูล" icon="download" onPress={() => exportBackup().catch((e) => Alert.alert('สำรองไม่สำเร็จ', String(e)))} />
+        <Button kind="ghost" title="กู้คืนจากไฟล์" onPress={restore} />
+      </Card>
+
+      <Card>
+        <Head icon="bolt" title="อัตราค่าไฟ (บิล กฟน.)" />
         {tiers.map((t, i) => (
-          <View key={i} style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-end' }}>
+          <View key={i} style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-end' }}>
             {i < tiers.length - 1 && (
               <View style={{ flex: 1 }}>
                 <Field label={tierLabel(i)} keyboardType="number-pad" value={t.upTo}
@@ -143,42 +175,34 @@ export default function SettingsScreen() {
             </View>
           </View>
         ))}
-        <Field label="ค่า Ft (บาท/หน่วย)" keyboardType="decimal-pad" value={ft} onChangeText={setFt} />
-        <Field label="ค่าบริการต่อเดือน" keyboardType="decimal-pad" value={service} onChangeText={setService} />
-        <Field label="VAT (%)" keyboardType="decimal-pad" value={vat} onChangeText={setVat} />
-        <Field label="วันจดมิเตอร์ / ตัดรอบบิล (วันที่)" keyboardType="number-pad" value={cycleDay} onChangeText={setCycleDay} />
-        <Button title="บันทึกอัตรา" onPress={saveTariff} />
-        <Button kind="secondary" title="คืนค่าตามบิล 09/69" onPress={resetTariff} />
-      </Card>
-
-      <Card>
-        <H>แจ้งเตือนจดมิเตอร์</H>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ fontSize: 16, color: C.text }}>เตือนทุกวัน</Text>
-          <Switch value={s.reminderEnabled} onValueChange={toggleReminder} trackColor={{ true: C.primary }} />
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}><Field label="Ft (บาท/หน่วย)" keyboardType="decimal-pad" value={ft} onChangeText={setFt} /></View>
+          <View style={{ flex: 1 }}><Field label="ค่าบริการ/เดือน" keyboardType="decimal-pad" value={service} onChangeText={setService} /></View>
         </View>
-        <Pressable onPress={pickTime}><Row label="เวลา" value={`🕒 ${s.reminderTime}`} /></Pressable>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}><Field label="VAT (%)" keyboardType="decimal-pad" value={vat} onChangeText={setVat} /></View>
+          <View style={{ flex: 1 }}><Field label="วันตัดรอบบิล" keyboardType="number-pad" value={cycleDay} onChangeText={setCycleDay} /></View>
+        </View>
+        <Button title="บันทึกอัตรา" icon="check" onPress={saveTariff} />
+        <Button kind="ghost" title="คืนค่าตามบิล 09/69" onPress={resetTariff} />
       </Card>
 
       <Card>
-        <H>อ่านภาพหน้าจอแอร์ (Claude API)</H>
-        <Sub>{hasKey ? '✓ ใส่ API key แล้ว' : 'ยังไม่ได้ใส่ API key — สมัครได้ที่ console.anthropic.com'}</Sub>
-        <Field label={hasKey ? 'เปลี่ยน key (เว้นว่างแล้วกดบันทึก = ลบ)' : 'API key'} value={key} onChangeText={setKey}
+        <Head icon="sparkle" title="AI อ่านภาพ (ไม่บังคับ)" bg={C.mintSoft} />
+        <T v="sub">ปกติ Denki อ่านตารางจากภาพในเครื่องได้ฟรีอยู่แล้ว ใส่ Claude API key ไว้เป็นตัวช่วยสำรองเมื่ออ่านไม่ออก (ประมาณ 1–2 บาท/ภาพ)</T>
+        {hasKey && <Badge icon="check" label="ใส่ API key แล้ว" bg={C.mintSoft} />}
+        <Field label={hasKey ? 'เปลี่ยน key (เว้นว่างแล้วกดบันทึก = ลบ)' : 'Claude API key'} value={key} onChangeText={setKey}
           autoCapitalize="none" autoCorrect={false} secureTextEntry placeholder="sk-ant-..." />
-        <Button kind="secondary" title="บันทึก key" onPress={saveKey} />
+        <Button kind="ghost" icon="key" title="บันทึก key" onPress={saveKey} />
       </Card>
 
-      <Card>
-        <H>สำรองข้อมูล</H>
-        <Sub>ข้อมูลทั้งหมดอยู่ในเครื่องนี้เท่านั้น สำรองเป็นไฟล์ไว้ใน Google Drive / LINE Keep เป็นระยะ เผื่อเปลี่ยนเครื่องหรือเครื่องหาย</Sub>
-        <Button title="💾 สำรองข้อมูล" onPress={() => exportBackup().catch((e) => Alert.alert('สำรองไม่สำเร็จ', String(e)))} />
-        <Button kind="secondary" title="กู้คืนจากไฟล์" onPress={restore} />
-      </Card>
-
-      <Card>
-        <H>เวอร์ชัน</H>
-        <Row label="แอป" value={Constants.expoConfig?.version ?? '-'} />
-        <Button kind="secondary" title="ตรวจหาอัปเดต" onPress={checkUpdate} busy={checking} />
+      <Card style={{ alignItems: 'center' }}>
+        <Image source={LOGO} style={{ width: 90, height: 96 }} resizeMode="contain" />
+        <T v="sub">เวอร์ชัน {Constants.expoConfig?.version ?? '-'}</T>
+        <View style={{ alignSelf: 'stretch' }}>
+          <Button kind="ghost" icon="sparkle" title="ตรวจหาอัปเดต" onPress={checkUpdate} busy={checking} />
+        </View>
+        <Spark size={44} still />
       </Card>
     </Screen>
   );

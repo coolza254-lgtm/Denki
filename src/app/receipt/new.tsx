@@ -1,12 +1,14 @@
 // Pick an AC and a date range, check the breakdown, enter PromptPay, create.
 import { useCallback, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Button, Card, DateButton, Field, H, Row, Screen, Segmented, Sub, baht, kwh, C } from '../../components/ui';
+import { Badge, Button, Card, DateButton, Divider, Field, Row, Screen, Segmented, T, baht, kwh } from '../../components/ui';
+import { Spark } from '../../components/Spark';
 import * as db from '../../lib/db';
 import { loadDataset, priceRange, type Dataset } from '../../lib/calc';
 import { addDays, today } from '../../lib/dates';
 import { isValidPromptPayId } from '../../lib/promptpay';
+import { C, F } from '../../theme';
 
 export default function NewReceipt() {
   const [ds, setDs] = useState<Dataset | null>(null);
@@ -52,38 +54,54 @@ export default function NewReceipt() {
   return (
     <Screen>
       <Segmented<db.AcId> value={ac} onChange={(v) => { setAc(v); if (ds) defaultsFor(v, ds); }}
-        options={[{ value: 1, label: 'แอร์ของฉัน' }, { value: 2, label: 'แอร์พี่ชาย' }]} />
-      <Card>
-        <DateButton label="ตั้งแต่วันที่" value={start} onChange={setStart} />
-        <DateButton label="ถึงวันที่" value={end} onChange={setEnd} />
-        {start > end && <Sub color={C.warn}>วันเริ่มต้องไม่เกินวันสุดท้าย</Sub>}
-      </Card>
+        options={[{ value: 1, label: 'แอร์ของฉัน', color: C.skySoft }, { value: 2, label: 'แอร์พี่ชาย', color: C.coralSoft }]} />
 
       <Card>
-        <H>รายละเอียด</H>
-        {!share ? (
-          <Sub color={C.warn}>คำนวณไม่ได้ — ต้องมีเลขมิเตอร์หรือบิลจริงของรอบนั้น</Sub>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}><DateButton label="ตั้งแต่" value={start} onChange={setStart} /></View>
+          <View style={{ flex: 1 }}><DateButton label="ถึง" value={end} onChange={setEnd} /></View>
+        </View>
+        {start > end && <Badge icon="alert" label="วันเริ่มต้องไม่เกินวันสุดท้าย" color={C.red} bg={C.redSoft} />}
+      </Card>
+
+      <Card color={share && share.kwh > 0 ? C.volt : C.card}>
+        {!share || share.kwh <= 0 ? (
+          <View style={{ alignItems: 'center', gap: 6 }}>
+            <Spark size={60} mood="sleepy" />
+            <T v="body" style={{ textAlign: 'center' }}>
+              {!share ? 'คำนวณไม่ได้ ต้องมีเลขมิเตอร์หรือบิลจริงของรอบนั้น' : 'ไม่มีหน่วยแอร์ในช่วงนี้'}
+            </T>
+          </View>
         ) : (
           <>
-            <Row label="หน่วยแอร์" value={`${kwh(share.kwh)} หน่วย`} />
-            <Row label={`ค่าพลังงาน (เฉลี่ย ${share.energyRate.toFixed(4)} บ./หน่วย)`} value={baht(share.energy)} />
-            <Row label={`Ft (${share.ftRate.toFixed(4)} บ./หน่วย)`} value={baht(share.ft)} />
-            <Row label={`ค่าบริการ (${(share.servicePct * 100).toFixed(1)}%)`} value={baht(share.service)} />
-            <Row label="รวมก่อน VAT" value={baht(share.subtotal)} />
-            <Row label="VAT 7%" value={baht(share.vat)} />
-            <Row label="ยอดชำระ" value={`฿${baht(share.total)}`} bold color={C.primary} />
-            {share.estimated && <Sub>* บางช่วงยังไม่มีบิลจริง ใช้ค่าประมาณจากมิเตอร์</Sub>}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <T v="sub" style={{ color: C.ink }}>ยอดที่ต้องเก็บ</T>
+                <T v="display" style={{ fontFamily: F.bold }}>฿{baht(share.total)}</T>
+                <T v="small" style={{ color: C.ink }}>{kwh(share.kwh)} หน่วย</T>
+              </View>
+              <Spark size={64} />
+            </View>
+            <View style={{ backgroundColor: '#FFFFFFB0', borderRadius: 16, padding: 12, gap: 2, borderWidth: 1.5, borderColor: C.ink }}>
+              <Row label={`ค่าพลังงาน (เฉลี่ย ${share.energyRate.toFixed(4)})`} value={baht(share.energy)} />
+              <Row label={`Ft (${share.ftRate.toFixed(4)})`} value={baht(share.ft)} />
+              <Row label={`ค่าบริการ (${(share.servicePct * 100).toFixed(1)}%)`} value={baht(share.service)} />
+              <Divider />
+              <Row label="รวมก่อน VAT" value={baht(share.subtotal)} />
+              <Row label="VAT 7%" value={baht(share.vat)} />
+            </View>
+            {share.estimated && <T v="small" style={{ color: C.ink }}>* บางช่วงยังไม่มีบิลจริง ใช้ค่าประมาณจากมิเตอร์</T>}
           </>
         )}
       </Card>
 
       <Card>
-        <H>พร้อมเพย์ผู้รับเงิน</H>
+        <T v="h">พร้อมเพย์ผู้รับเงิน</T>
         <Field label="เบอร์โทร หรือ เลขบัตรประชาชน" keyboardType="number-pad" value={ppId} onChangeText={setPpId} />
         <Field label="ชื่อที่แสดงในใบเสร็จ (ไม่บังคับ)" value={name} onChangeText={setName} />
       </Card>
 
-      <Button title="สร้างใบเสร็จ" onPress={create} busy={busy} disabled={!share || share.kwh <= 0} />
+      <Button title="สร้างใบเสร็จ" icon="receipt" onPress={create} busy={busy} disabled={!share || share.kwh <= 0} />
     </Screen>
   );
 }

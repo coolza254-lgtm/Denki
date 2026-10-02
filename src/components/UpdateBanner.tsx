@@ -1,7 +1,9 @@
 // Shows "new version available"; one tap downloads and installs it.
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, Text } from 'react-native';
-import { C } from './ui';
+import { ActivityIndicator, Alert, View } from 'react-native';
+import { C } from '../theme';
+import { Icon } from './Icon';
+import { Squish, T } from './ui';
 import { checkForUpdate, installRelease, type Release } from '../lib/updater';
 
 export function UpdateBanner() {
@@ -12,8 +14,7 @@ export function UpdateBanner() {
 
   if (!release) return null;
   return (
-    <Pressable
-      disabled={busy}
+    <Squish bg={C.mint} depth={3} disabled={busy}
       onPress={async () => {
         setBusy(true);
         try {
@@ -24,10 +25,14 @@ export function UpdateBanner() {
           setBusy(false);
         }
       }}
-      style={{ backgroundColor: C.good, padding: 14, borderRadius: 12 }}>
-      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15, textAlign: 'center' }}>
-        {busy ? 'กำลังดาวน์โหลด…' : `✨ มีเวอร์ชันใหม่ (1.0.${release.build}) — แตะเพื่ออัปเดต`}
-      </Text>
-    </Pressable>
+      style={{ padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.ink }}>
+        {busy ? <ActivityIndicator color={C.ink} /> : <Icon name="sparkle" size={20} />}
+      </View>
+      <View style={{ flex: 1 }}>
+        <T v="h" style={{ color: '#fff', fontSize: 15 }}>{busy ? 'กำลังดาวน์โหลด…' : 'มี Denki เวอร์ชันใหม่!'}</T>
+        <T v="small" style={{ color: '#E6FFF4' }}>เวอร์ชัน 1.0.{release.build} · แตะเพื่ออัปเดต</T>
+      </View>
+    </Squish>
   );
 }
