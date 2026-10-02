@@ -1,0 +1,15 @@
+# Builds the installable APK. Needed only the first time, and again after
+# the app version in app.json is bumped (new native libraries).
+name: 2. สร้างไฟล์ติดตั้ง APK
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - uses: expo/expo-github-action@v8
+        with: { eas-version: latest, token: '${{ secrets.EXPO_TOKEN }}' }
+      - run: eas build --platform android --profile production --non-interactive --no-wait
