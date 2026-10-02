@@ -288,6 +288,18 @@ export async function setReceiptSlip(id: number, slipPath: string | null) {
   await db.runAsync('UPDATE receipts SET slip_path = ? WHERE id = ?', slipPath, id);
 }
 
+export async function setReceiptPromptPay(id: number, promptpayId: string, payeeName: string) {
+  const db = await getDb();
+  await db.runAsync('UPDATE receipts SET promptpay_id = ?, payee_name = ? WHERE id = ?', promptpayId, payeeName, id);
+}
+
+/** Point every unpaid receipt at a new PromptPay account. Returns how many changed. */
+export async function setUnpaidReceiptsPromptPay(promptpayId: string, payeeName: string): Promise<number> {
+  const db = await getDb();
+  const r = await db.runAsync('UPDATE receipts SET promptpay_id = ?, payee_name = ? WHERE paid = 0', promptpayId, payeeName);
+  return r.changes;
+}
+
 export async function deleteReceipt(id: number) {
   const db = await getDb();
   await db.runAsync('DELETE FROM receipts WHERE id = ?', id);

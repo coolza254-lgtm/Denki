@@ -13,6 +13,7 @@ import { getApiKey, setApiKey } from '../lib/acExtract';
 import { cancelReminder, scheduleDailyReminder } from '../lib/notify';
 import { exportBackup, pickBackup } from '../lib/backup';
 import { reset, RESET_LABEL } from '../lib/reset';
+import { isValidPromptPayId } from '../lib/promptpay';
 import { checkForUpdate, currentBuild, installRelease } from '../lib/updater';
 
 const num = (s: string) => Number(s.replace(/,/g, ''));
@@ -39,6 +40,8 @@ export default function SettingsScreen() {
   const [key, setKey] = useState('');
   const [hasKey, setHasKey] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [ppId, setPpId] = useState('');
+  const [ppName, setPpName] = useState('');
   const [wipe, setWipe] = useState<db.ResetPart[]>([]);
   const [wiping, setWiping] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -51,6 +54,8 @@ export default function SettingsScreen() {
       setService(String(x.tariff.serviceCharge));
       setVat(String(Math.round(x.tariff.vatRate * 100)));
       setCycleDay(String(x.cycleEndDay));
+      setPpId(x.promptpayId);
+      setPpName(x.payeeName);
     });
     getApiKey().then((k) => setHasKey(!!k));
   }, [reloadKey]));
@@ -139,6 +144,20 @@ export default function SettingsScreen() {
     }
   };
 
+  const savePromptPay = async () => {
+    const id = ppId.replace(/\D/g, '');
+    if (!isValidPromptPayId(id)) return Alert.alert('เลขพร้อมเพย์ไม่ถูกต้อง', 'ใส่เบอร์โทร 10 หลัก หรือเลขบัตรประชาชน 13 หลัก');
+    await db.saveSettings({ promptpayId: id, payeeName: ppName.trim() });
+    setPpId(id);
+    Alert.alert('บันทึกแล้ว', 'ใบเสร็จใหม่จะใช้เลขนี้ จะเปลี่ยนใบเสร็จที่ยังไม่จ่ายด้วยไหม?', [
+      { text: 'ไม่ต้อง', style: 'cancel' },
+      { text: 'เปลี่ยนด้วย', onPress: async () => {
+        const n = await db.setUnpaidReceiptsPromptPay(id, ppName.trim());
+        Alert.alert(`อัปเดต ${n} ใบเสร็จแล้ว`);
+      } },
+    ]);
+  };
+
   const ALL = Object.keys(RESET_LABEL) as db.ResetPart[];
   const toggleWipe = (p: db.ResetPart) => setWipe(wipe.includes(p) ? wipe.filter((x) => x !== p) : [...wipe, p]);
   const doWipe = async () => {
@@ -187,6 +206,13 @@ export default function SettingsScreen() {
         <T v="sub">ข้อมูลอยู่ในเครื่องนี้เท่านั้น สำรองเก็บไว้ใน Google Drive / LINE Keep เป็นระยะ เผื่อเปลี่ยนเครื่อง</T>
         <Button title="สำรองข้อมูล" icon="download" onPress={() => exportBackup().catch((e) => Alert.alert('สำรองไม่สำเร็จ', String(e)))} />
         <Button kind="ghost" title="กู้คืนจากไฟล์" onPress={restore} />
+      </Card>
+
+      <Card>
+        <Head icon="wallet" title="พร้อมเพย์รับเงิน" bg={C.coralSoft} />
+        <Field label="เบอร์โทร หรือ เลขบัตรประชาชน" keyboardType="number-pad" value={ppId} onChangeText={setPpId} />
+        <Field label="ชื่อที่แสดงในใบเสร็จ (ไม่บังคับ)" value={ppName} onChangeText={setPpName} />
+        <Button title="บันทึกพร้อมเพย์" icon="check" onPress={savePromptPay} />
       </Card>
 
       <Card>

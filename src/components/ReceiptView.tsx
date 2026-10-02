@@ -6,7 +6,7 @@ import { baht, kwh } from './ui';
 import type { Receipt } from '../lib/db';
 import type { Share } from '../lib/tariff';
 import { promptPayPayload } from '../lib/promptpay';
-import { formatThaiDate, daysBetween } from '../lib/dates';
+import { THAI_MONTHS, daysBetween, parseISODate } from '../lib/dates';
 import { C, F } from '../theme';
 
 
@@ -16,6 +16,18 @@ function Line({ label, value, bold }: { label: string; value: string; bold?: boo
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, gap: 10 }}>
       <Text style={[st, { flexShrink: 1, color: bold ? C.ink : C.inkSoft }]}>{label}</Text>
       <Text style={[st, { fontVariant: ['tabular-nums'] }]}>{value}</Text>
+    </View>
+  );
+}
+
+/** A white ticket with a big day number and the Thai month and year. */
+function DateTicket({ label, date }: { label: string; date: string }) {
+  const d = parseISODate(date);
+  return (
+    <View style={{ flex: 1, backgroundColor: '#fff', borderRadius: 16, borderWidth: 2, borderColor: C.ink, paddingVertical: 8, alignItems: 'center' }}>
+      <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.inkSoft }}>{label}</Text>
+      <Text style={{ fontFamily: F.bold, fontSize: 38, lineHeight: 46, color: C.ink }}>{d.getDate()}</Text>
+      <Text style={{ fontFamily: F.semi, fontSize: 15, color: C.ink }}>{THAI_MONTHS[d.getMonth()]} {d.getFullYear() + 543}</Text>
     </View>
   );
 }
@@ -32,11 +44,15 @@ export const ReceiptView = forwardRef<View, { receipt: Receipt }>(({ receipt: r 
   return (
     <View ref={ref} collapsable={false} style={{ backgroundColor: C.bg, padding: 12 }}>
       <View style={{ backgroundColor: '#fff', borderRadius: 24, borderWidth: 2, borderColor: C.ink, overflow: 'hidden' }}>
-        <View style={{ backgroundColor: C.volt, paddingVertical: 16, paddingHorizontal: 18, alignItems: 'center', gap: 2, borderBottomWidth: 2, borderColor: C.ink }}>
-          <Text style={{ fontFamily: F.bold, fontSize: 20, color: C.ink }}>
-            {formatThaiDate(r.startDate)} – {formatThaiDate(r.endDate)}
-          </Text>
-          <Text style={{ fontFamily: F.regular, fontSize: 14, color: C.ink }}>{days} วัน</Text>
+        <View style={{ backgroundColor: C.volt, paddingVertical: 18, paddingHorizontal: 16, gap: 12, borderBottomWidth: 2, borderColor: C.ink }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <DateTicket label="ตั้งแต่" date={r.startDate} />
+            <Text style={{ fontFamily: F.bold, fontSize: 26, color: C.ink }}>→</Text>
+            <DateTicket label="ถึง" date={r.endDate} />
+          </View>
+          <View style={{ alignSelf: 'center', backgroundColor: C.ink, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 4 }}>
+            <Text style={{ fontFamily: F.semi, fontSize: 14, color: C.volt }}>รวม {days} วัน</Text>
+          </View>
         </View>
 
         <View style={{ padding: 18, gap: 2 }}>
