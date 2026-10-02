@@ -1,0 +1,45 @@
+{
+  "name": "denki",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@react-native-community/datetimepicker": "9.1.0",
+    "expo": "~57.0.26",
+    "expo-constants": "~57.0.20",
+    "expo-crypto": "~57.0.3",
+    "expo-document-picker": "~57.0.3",
+    "expo-file-system": "~57.0.7",
+    "expo-image-manipulator": "~57.0.20",
+    "expo-image-picker": "~57.0.20",
+    "expo-linking": "~57.0.11",
+    "expo-notifications": "~57.0.21",
+    "expo-router": "~57.0.24",
+    "expo-secure-store": "~57.0.4",
+    "expo-sharing": "~57.0.22",
+    "expo-sqlite": "~57.0.3",
+    "expo-status-bar": "~57.0.1",
+    "expo-updates": "~57.0.24",
+    "react": "19.2.3",
+    "react-dom": "^19.2.3",
+    "react-native": "0.86.3",
+    "react-native-qrcode-svg": "^6.3.26",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-svg": "15.15.4",
+    "react-native-view-shot": "5.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "update:publish": "eas update --branch production --auto"
+  },
+  "private": true
+}
