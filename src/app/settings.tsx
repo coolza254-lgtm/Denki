@@ -2,7 +2,6 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, Switch, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import Constants from 'expo-constants';
-import * as Updates from 'expo-updates';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { Button, C, Card, Field, H, Row, Screen, Sub } from '../components/ui';
 import * as db from '../lib/db';
@@ -10,6 +9,7 @@ import { DEFAULT_TARIFF } from '../lib/tariff';
 import { getApiKey, setApiKey } from '../lib/acExtract';
 import { cancelReminder, scheduleDailyReminder } from '../lib/notify';
 import { exportBackup, pickBackup } from '../lib/backup';
+import { checkForUpdate, currentBuild, installRelease } from '../lib/updater';
 
 const num = (s: string) => Number(s.replace(/,/g, ''));
 
@@ -107,18 +107,14 @@ export default function SettingsScreen() {
   };
 
   const checkUpdate = async () => {
-    if (!Updates.isEnabled) return Alert.alert('โหมดพัฒนา ไม่มีระบบอัปเดต');
+    if (currentBuild === 0) return Alert.alert('โหมดพัฒนา ไม่มีระบบอัปเดต');
     setChecking(true);
     try {
-      const r = await Updates.checkForUpdateAsync();
-      if (!r.isAvailable) {
-        Alert.alert('เป็นเวอร์ชันล่าสุดแล้ว');
-      } else {
-        await Updates.fetchUpdateAsync();
-        await Updates.reloadAsync();
-      }
+      const r = await checkForUpdate();
+      if (!r) Alert.alert('เป็นเวอร์ชันล่าสุดแล้ว');
+      else await installRelease(r);
     } catch (e) {
-      Alert.alert('ตรวจสอบไม่สำเร็จ', String(e));
+      Alert.alert('อัปเดตไม่สำเร็จ', String(e));
     } finally {
       setChecking(false);
     }
@@ -182,7 +178,6 @@ export default function SettingsScreen() {
       <Card>
         <H>เวอร์ชัน</H>
         <Row label="แอป" value={Constants.expoConfig?.version ?? '-'} />
-        <Row label="อัปเดตล่าสุด" value={Updates.createdAt ? Updates.createdAt.toLocaleString('th-TH') : 'ติดมากับตัวติดตั้ง'} />
         <Button kind="secondary" title="ตรวจหาอัปเดต" onPress={checkUpdate} busy={checking} />
       </Card>
     </Screen>

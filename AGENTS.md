@@ -29,10 +29,9 @@ Run lint and typecheck before declaring any task done.
 - Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
 - Docs: https://docs.expo.dev/router/introduction.md
 
-## Building with EAS
+## Building and updates (no EAS)
 
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
-Docs: https://docs.expo.dev/eas/index.md
+This project deliberately avoids paid/hosted Expo services. `.github/workflows/release.yml` runs `expo prebuild` + Gradle on GitHub Actions, signs the APK with the key in `signing/release.jks.enc` (decrypted with the `KEYSTORE_PASSWORD` secret) and publishes it as a GitHub Release tagged `build-<run number>`. `src/lib/updater.ts` checks the latest release and installs it. Do not add `expo-updates` or EAS config.
 
 ## Rules
 

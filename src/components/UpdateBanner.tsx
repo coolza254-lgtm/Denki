@@ -1,34 +1,32 @@
-// Shows "new version available" and applies it with one tap (EAS Update).
+// Shows "new version available"; one tap downloads and installs it.
 import { useEffect, useState } from 'react';
-import { Pressable, Text } from 'react-native';
-import * as Updates from 'expo-updates';
+import { Alert, Pressable, Text } from 'react-native';
 import { C } from './ui';
+import { checkForUpdate, installRelease, type Release } from '../lib/updater';
 
 export function UpdateBanner() {
-  const [state, setState] = useState<'idle' | 'available' | 'downloading'>('idle');
+  const [release, setRelease] = useState<Release | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (__DEV__ || !Updates.isEnabled) return;
-    Updates.checkForUpdateAsync()
-      .then((r) => { if (r.isAvailable) setState('available'); })
-      .catch(() => {});
-  }, []);
+  useEffect(() => { checkForUpdate().then(setRelease); }, []);
 
-  if (state === 'idle') return null;
+  if (!release) return null;
   return (
     <Pressable
+      disabled={busy}
       onPress={async () => {
-        setState('downloading');
+        setBusy(true);
         try {
-          await Updates.fetchUpdateAsync();
-          await Updates.reloadAsync();
-        } catch {
-          setState('available');
+          await installRelease(release);
+        } catch (e) {
+          Alert.alert('อัปเดตไม่สำเร็จ', String(e));
+        } finally {
+          setBusy(false);
         }
       }}
       style={{ backgroundColor: C.good, padding: 14, borderRadius: 12 }}>
       <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15, textAlign: 'center' }}>
-        {state === 'downloading' ? 'กำลังอัปเดต…' : '✨ มีเวอร์ชันใหม่ — แตะเพื่ออัปเดต'}
+        {busy ? 'กำลังดาวน์โหลด…' : `✨ มีเวอร์ชันใหม่ (1.0.${release.build}) — แตะเพื่ออัปเดต`}
       </Text>
     </Pressable>
   );

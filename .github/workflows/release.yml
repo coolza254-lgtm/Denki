@@ -1,0 +1,94 @@
+# Free build pipeline (GitHub Actions only, no paid services).
+# - Every push / PR: typecheck + tests.
+# - Push to the default branch: build a signed APK and publish it as a
+#   GitHub Release (tag build-<run number>). The app finds it and offers
+#   the update in-app.
+name: สร้างแอป
+on:
+  push:
+    paths-ignore: ['**.md']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  apk:
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    env:
+      DENKI_BUILD: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17, cache: gradle }
+      - run: npm ci
+
+      # The signing key is created once, encrypted with KEYSTORE_PASSWORD
+      # and committed, so every build is signed with the same key (Android
+      # refuses updates signed with a different one).
+      - name: Signing key
+        id: key
+        env:
+          PW: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$PW" ]; then
+            echo "::warning::ยังไม่ได้ตั้ง secret KEYSTORE_PASSWORD — สร้าง APK ทดสอบได้ แต่จะไม่ปล่อยอัปเดต (ดู README)"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ ! -f signing/release.jks.enc ]; then
+            mkdir -p signing
+            keytool -genkeypair -keystore "$RUNNER_TEMP/new.jks" -alias denki -keyalg RSA -keysize 2048 \
+              -validity 36500 -storepass "$PW" -keypass "$PW" -dname "CN=Denki"
+            openssl enc -aes-256-cbc -pbkdf2 -salt -in "$RUNNER_TEMP/new.jks" -out signing/release.jks.enc -pass env:PW
+            git config user.name "github-actions"
+            git config user.email "github-actions@users.noreply.github.com"
+            git add signing/release.jks.enc
+            git commit -m "Add encrypted signing key"
+            git push
+          fi
+          openssl enc -d -aes-256-cbc -pbkdf2 -in signing/release.jks.enc -out "$RUNNER_TEMP/release.jks" -pass env:PW
+          echo "DENKI_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          echo "DENKI_KEYSTORE_PASSWORD=$PW" >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - run: npx expo prebuild --platform android --no-install
+      # 64-bit ARM only: covers current Android phones and halves build time.
+      - run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+        working-directory: android
+      - run: mv android/app/build/outputs/apk/release/app-release.apk denki-1.0.${{ github.run_number }}.apk
+
+      - name: Publish release
+        if: steps.key.outputs.signed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ github.event.head_commit.message || 'อัปเดต' }}
+        run: |
+          gh release create "build-$DENKI_BUILD" "denki-1.0.$DENKI_BUILD.apk" \
+            --title "เวอร์ชัน 1.0.$DENKI_BUILD" --notes "$NOTES" --target "$GITHUB_SHA"
+
+      - name: Keep test APK
+        if: steps.key.outputs.signed != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: denki-test-apk
+          path: denki-1.0.${{ github.run_number }}.apk
+          retention-days: 7

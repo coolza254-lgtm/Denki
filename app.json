@@ -3,17 +3,11 @@
     "name": "ค่าไฟบ้าน",
     "slug": "denki",
     "scheme": "denki",
-    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "runtimeVersion": { "policy": "appVersion" },
-    "updates": {
-      "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
-    },
     "android": {
       "package": "com.coolza254.denki",
+      "permissions": ["android.permission.REQUEST_INSTALL_PACKAGES"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -26,16 +20,17 @@
       "expo-router",
       "expo-sqlite",
       "expo-secure-store",
-      "expo-updates",
       "@react-native-community/datetimepicker",
       [
         "expo-image-picker",
         {
           "photosPermission": "ใช้เลือกภาพหน้าจอแอร์ รูปบิล และสลิป",
-          "cameraPermission": "ใช้ถ่ายรูปบิลค่าไฟและสลิปโอนเงิน"
+          "cameraPermission": "ใช้ถ่ายรูปบิลค่าไฟและสลิปโอนเงิน",
+          "microphonePermission": false
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "./plugins/withReleaseSigning"
     ]
   }
 }
